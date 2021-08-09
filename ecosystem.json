@@ -1,0 +1,9 @@
+{
+  "name": "discord",
+  "script": "index.js",
+  "watch": true,
+  "autorestart": true,
+  "ignore_watch": ["node_modules", "out", "exclusions.json"],
+  "error_file": "out/err.log",
+  "out_file": "out/out.log"
+}
