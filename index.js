@@ -55,7 +55,7 @@ client.once('ready', async () => {
         }],
     },{
         name: 'exclude',
-        description: 'Excludes a day from your personal schedule (call it again to include it again)',
+        description: 'Excludes a day from your personal schedule (use it again to include it again)',
         options: [{
             name: 'day',
             type: 'STRING',
@@ -96,12 +96,8 @@ client.once('ready', async () => {
 
     await client.guilds.fetch();
     for (var e of client.guilds.cache) {
-	    await e[1].roles.fetch();
-	    await e[1].members.fetch();
-
         for (var c of e[1].commands.cache)
             await c[1].delete();
-
         await e[1].commands.set(data);
     }
 });
@@ -125,6 +121,19 @@ const daysymbols = [
     "🟣",
     "🔴",
 ];
+
+async function recacheMembers() {
+    await client.guilds.fetch();
+    for (var e of client.guilds.cache) {
+        for (var c of e[1].commands.cache)
+            await c[1].delete();
+        await e[1].commands.set(data);
+    }
+}
+
+client.on('guildMemberUpdate', recacheMembers);
+client.on('guildMemberAdd', recacheMembers);
+client.on('guildCreate', recacheMembers);
 
 client.on('interactionCreate', async interaction => {
 	if (!interaction.isCommand()) return;
@@ -341,7 +350,11 @@ async function handleReaction(reaction, user) {
     
     await wat.guild.roles.fetch();
     await wat.guild.members.fetch();
-    var members = await wat.guild.roles.resolve(role).members;
+    var members = (await wat.guild.roles.fetch(role)).members;
+    if (members.size == 0)
+    {
+        console.log(`post with content ${wat.content} has no members!`);
+    }
 
     var userlist = "";
     members.forEach((member) => {
