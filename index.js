@@ -96,6 +96,7 @@ client.once('ready', async () => {
 
     await client.guilds.fetch();
     for (var e of client.guilds.cache) {
+	    await e[1].roles.fetch();
 	    await e[1].members.fetch();
 
         for (var c of e[1].commands.cache)
@@ -136,7 +137,7 @@ client.on('interactionCreate', async interaction => {
 
         if (wat && wat.author.id == client.user.id)
         {
-            await interaction.deferReply();
+            await interaction.deferReply({ ephemeral : false });
             var match = wat.content.match(/<@&(\d+)>/g);
             if (match != null)
             {
@@ -144,7 +145,7 @@ client.on('interactionCreate', async interaction => {
                 var members = wat.guild.roles.cache.get(role).members;
                 var memberCount = members.size;
                 for (const member of members) {
-                    if (member[0] == client.id)
+                    if (member[0] == client.user.id)
                         memberCount--;
                 }
 
@@ -158,6 +159,7 @@ client.on('interactionCreate', async interaction => {
 
                 var bestContent = "";
                 var bestReactionCount = 0;
+                var bestReactionDay = 0;
 
                 for (var i = 0; i < 7; i++) {
                     var react = userlists[(i + 3) % 7];
@@ -175,11 +177,14 @@ client.on('interactionCreate', async interaction => {
 
                         userlists[(i + 3) % 7] = userlist.slice(0, -2);
                         
+                        console.log(`${daytranslate[(i + 3) % 7]} has ${count} and ${memberCount}`);
+                        
                         if ((count == memberCount || count >= 6) && count > bestReactionCount)  {
                             var content = `${daytranslate[(i + 3) % 7]}: React on times when you **CAN** run.\nMembers: ${userlists[(i + 3) % 7]}.\n`;
 
                             bestContent = content;
                             bestReactionCount = count;
+                            bestReactionDay = i;
                         }
                     }
                 };
@@ -187,8 +192,8 @@ client.on('interactionCreate', async interaction => {
                 if (bestReactionCount > 0) {
                     var content = bestContent;
                     var monday = new Date();
-                    monday.setDate(monday.getDate() + (1 + 7 - monday.getDay()) % 7);
-                    monday.setDate(monday.getDate() + i + 3);
+                    monday.setDate(monday.getDate() + (4 + 7 - monday.getDay()) % 7);
+                    monday.setDate(monday.getDate() + bestReactionDay);
                     
                     var kek = Math.floor(monday.getTime() / 1000);
                     var c = 1;
@@ -225,8 +230,7 @@ client.on('interactionCreate', async interaction => {
         
         const exclusions = require('./exclusions.json');
 
-        if (exclusions[interaction.user.id] == null)
-        {
+        if (exclusions[interaction.user.id] == null) {
             interaction.editReply({ content: `You currently have no excluded days.` });
         } else {
             var days = "";
@@ -245,13 +249,14 @@ client.on('interactionCreate', async interaction => {
         for (const match of cmdmatches) {
             time += (Date.parse(match) - Date.today()) / 1000;
         }
-
-        var msg = await interaction.editReply({ content: `<@&${interaction.options.getRole("role").id}>\n<t:${Math.floor(time) - 2 * 60 * 60}>` });
         
+        var msg = await interaction.channel.send({ content: `<@&${interaction.options.getRole("role").id}>\n<t:${Math.floor(time) - 2 * 60 * 60}>` });
         await msg.react("👍");
         await msg.react("👎");
+
+        interaction.deleteReply();
     } else if (command === 'schedule') {
-        await interaction.deferReply();
+        await interaction.deferReply({ ephemeral : false });
 
         const role = interaction.options.getRole('role').id;
         var members = interaction.guild.roles.cache.get(role).members;
@@ -333,7 +338,10 @@ async function handleReaction(reaction, user) {
     if (match == null) return;
 
     var role = match[0].slice(3, -1);
-    var members = wat.guild.roles.cache.get(role).members;
+    
+    await wat.guild.roles.fetch();
+    await wat.guild.members.fetch();
+    var members = await wat.guild.roles.resolve(role).members;
 
     var userlist = "";
     members.forEach((member) => {
@@ -348,6 +356,8 @@ async function handleReaction(reaction, user) {
     for (var i = 0; i < 7; i++)
     {
         var thing = await wat.reactions.resolve(daysymbols[(i + 3) % 7]);
+        if (thing)
+            thing = await thing.fetch();
         if (thing) {
             var reacts = await thing.users.fetch();
             content += `${daysymbols[(i + 3) % 7]} ${daytranslate[(i + 3) % 7]}: `;
@@ -360,6 +370,8 @@ async function handleReaction(reaction, user) {
                 }
             });
             content += temp.slice(0, -2) + "\n";
+        } else {
+            console.log(`post with content ${wat.content} is missing reaction for ${daytranslate[(i + 3) % 7]}`);
         }
     }
 
