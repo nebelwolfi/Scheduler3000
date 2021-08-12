@@ -13,86 +13,86 @@ const client = new Client({
 	partials: ['MESSAGE', 'CHANNEL', 'REACTION']
 });
 
+const data = [{
+    name: 'schedule',
+    description: 'Sets up a schedule post',
+    options: [{
+        name: 'role',
+        type: 'ROLE',
+        description: 'The runners role',
+        required: true,
+    }],
+},{
+    name: 'exclusions',
+    description: 'Lists your current excluded days',
+},{
+    name: 'time',
+    description: 'Sets up a post with a specific time',
+    options: [{
+        name: 'role',
+        type: 'ROLE',
+        description: 'The runners role',
+        required: true,
+    },{
+        name: 'time',
+        type: 'STRING',
+        description: 'The time in CEST, for example: "tomorrow 8pm" or "12. august 8pm"',
+        required: true,
+    }],
+},{
+    name: 'timepost',
+    description: 'Sets up a time post respecting the schedule',
+    options: [{
+        name: 'time',
+        type: 'STRING',
+        description: 'The times in CEST, for example: 7pm 7:30pm 8pm ...',
+        required: true,
+    }],
+},{
+    name: 'exclude',
+    description: 'Excludes a day from your personal schedule (use it again to include it again)',
+    options: [{
+        name: 'day',
+        type: 'STRING',
+        description: 'The day',
+        required: true,
+        choices: [
+            {
+                name: 'Monday',
+                value: 'monday',
+            },
+            {
+                name: 'Tuesday',
+                value: 'tuesday',
+            },
+            {
+                name: 'Wednesday',
+                value: 'wednesday',
+            },
+            {
+                name: 'Thursday',
+                value: 'thursday',
+            },
+            {
+                name: 'Friday',
+                value: 'friday',
+            },
+            {
+                name: 'Saturday',
+                value: 'saturday',
+            },
+            {
+                name: 'Sunday',
+                value: 'sunday',
+            },
+        ],
+    }],
+}];
+
 client.once('ready', async () => {
 	console.log('Ready!');
     
 	if (!client.application?.owner) await client.application?.fetch();
-
-    const data = [{
-        name: 'schedule',
-        description: 'Sets up a schedule post',
-        options: [{
-            name: 'role',
-            type: 'ROLE',
-            description: 'The runners role',
-            required: true,
-        }],
-    },{
-        name: 'exclusions',
-        description: 'Lists your current excluded days',
-    },{
-        name: 'time',
-        description: 'Sets up a post with a specific time',
-        options: [{
-            name: 'role',
-            type: 'ROLE',
-            description: 'The runners role',
-            required: true,
-        },{
-            name: 'time',
-            type: 'STRING',
-            description: 'The time in CEST, for example: tomorrow 8pm',
-            required: true,
-        }],
-    },{
-        name: 'timepost',
-        description: 'Sets up a time post respecting the schedule',
-        options: [{
-            name: 'time',
-            type: 'STRING',
-            description: 'The times in CEST, for example: 7pm 7:30pm 8pm ...',
-            required: true,
-        }],
-    },{
-        name: 'exclude',
-        description: 'Excludes a day from your personal schedule (use it again to include it again)',
-        options: [{
-            name: 'day',
-            type: 'STRING',
-            description: 'The day',
-            required: true,
-            choices: [
-                {
-                    name: 'Monday',
-                    value: 'monday',
-                },
-                {
-                    name: 'Tuesday',
-                    value: 'tuesday',
-                },
-                {
-                    name: 'Wednesday',
-                    value: 'wednesday',
-                },
-                {
-                    name: 'Thursday',
-                    value: 'thursday',
-                },
-                {
-                    name: 'Friday',
-                    value: 'friday',
-                },
-                {
-                    name: 'Saturday',
-                    value: 'saturday',
-                },
-                {
-                    name: 'Sunday',
-                    value: 'sunday',
-                },
-            ],
-        }],
-    }];
 
     await client.guilds.fetch();
     for (var e of client.guilds.cache) {
@@ -250,20 +250,33 @@ client.on('interactionCreate', async interaction => {
             interaction.editReply({ content: days.length == 0 ? `You currently have no excluded days.` : `Excluded days: ${days.slice(0, -2)}` });
         }
     } else if (command === 'time') {
-        await interaction.deferReply({ ephemeral : false });
-        
-        var cmdmatches = interaction.options.getString("time").match(/([a-zA-Z0-9:]+)/g);
+        var cmdmatches = interaction.options.getString("time");
+        if (!Date.parse(cmdmatches)) {
+            await interaction.deferReply({ ephemeral : true });
+            interaction.editReply("Could not parse time.");
+        } else {
+            await interaction.deferReply({ ephemeral : false });
+            var time = 0;
 
-        var time = Date.today().getTime() / 1000;
-        for (const match of cmdmatches) {
-            time += (Date.parse(match) - Date.today()) / 1000;
+            var cmd = interaction.options.getString("time");
+
+            if (cmd.includes("tomorrow")) {
+                var cmdmatches = cmd.match(/([a-zA-Z0-9:]+)/g);
+    
+                time = Date.today().getTime() / 1000;
+                for (const match of cmdmatches) {
+                    time += (Date.parse(match) - Date.today()) / 1000;
+                }
+            } else {
+                time = Date.parse(cmd) / 1000;
+            }
+            
+            var msg = await interaction.channel.send({ content: `<@&${interaction.options.getRole("role").id}>\n<t:${Math.floor(time) - 2 * 60 * 60}>` });
+            await msg.react("👍");
+            await msg.react("👎");
+
+            interaction.deleteReply();
         }
-        
-        var msg = await interaction.channel.send({ content: `<@&${interaction.options.getRole("role").id}>\n<t:${Math.floor(time) - 2 * 60 * 60}>` });
-        await msg.react("👍");
-        await msg.react("👎");
-
-        interaction.deleteReply();
     } else if (command === 'schedule') {
         await interaction.deferReply({ ephemeral : false });
 
