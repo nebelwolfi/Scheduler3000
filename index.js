@@ -13,93 +13,163 @@ const client = new Client({
 	partials: ['MESSAGE', 'CHANNEL', 'REACTION']
 });
 
-const data = [{
-    name: 'schedule',
-    description: 'Sets up a schedule post',
-    options: [{
-        name: 'role',
-        type: 'ROLE',
-        description: 'The runners role',
-        required: true,
-    }],
-},{
-    name: 'exclusions',
-    description: 'Lists your current excluded days',
-},{
-    name: 'time',
-    description: 'Sets up a post with a specific time',
-    options: [{
-        name: 'role',
-        type: 'ROLE',
-        description: 'The runners role',
-        required: true,
+const data = [
+    {
+        name: 'schedule',
+        description: 'Sets up a schedule post',
+        options: [{
+            name: 'role',
+            type: 'ROLE',
+            description: 'The runners role',
+            required: true,
+        }],
+    },{
+        name: 'exclusions',
+        description: 'Lists your current excluded days',
     },{
         name: 'time',
-        type: 'STRING',
-        description: 'The time in CEST, for example: "tomorrow 8pm" or "12. august 8pm"',
-        required: true,
-    }],
-},{
-    name: 'timepost',
-    description: 'Sets up a time post respecting the schedule',
-    options: [{
-        name: 'time',
-        type: 'STRING',
-        description: 'The times in CEST, for example: 7pm 7:30pm 8pm ...',
-        required: true,
-    }],
-},{
-    name: 'exclude',
-    description: 'Excludes a day from your personal schedule (use it again to include it again)',
-    options: [{
-        name: 'day',
-        type: 'STRING',
-        description: 'The day',
-        required: true,
-        choices: [
-            {
-                name: 'Monday',
-                value: 'monday',
-            },
-            {
-                name: 'Tuesday',
-                value: 'tuesday',
-            },
-            {
-                name: 'Wednesday',
-                value: 'wednesday',
-            },
-            {
-                name: 'Thursday',
-                value: 'thursday',
-            },
-            {
-                name: 'Friday',
-                value: 'friday',
-            },
-            {
-                name: 'Saturday',
-                value: 'saturday',
-            },
-            {
-                name: 'Sunday',
-                value: 'sunday',
-            },
-        ],
-    }],
-}];
+        description: 'Sets up a post with a specific time',
+        options: [{
+            name: 'role',
+            type: 'ROLE',
+            description: 'The runners role',
+            required: true,
+        },{
+            name: 'time',
+            type: 'STRING',
+            description: 'The time in CEST, for example: "tomorrow 8pm" or "12. august 8pm"',
+            required: true,
+        }],
+    },{
+        name: 'timepost',
+        description: 'Sets up a time post respecting the schedule',
+        options: [{
+            name: 'time',
+            type: 'STRING',
+            description: 'The times in CEST, for example: 7pm 7:30pm 8pm ...',
+            required: true,
+        }],
+    },{
+        name: 'exclude',
+        description: 'Excludes a day from your personal schedule (use it again to include it again)',
+        options: [{
+            name: 'day',
+            type: 'STRING',
+            description: 'The day',
+            required: true,
+            choices: [
+                {
+                    name: 'Monday',
+                    value: 'monday',
+                },
+                {
+                    name: 'Tuesday',
+                    value: 'tuesday',
+                },
+                {
+                    name: 'Wednesday',
+                    value: 'wednesday',
+                },
+                {
+                    name: 'Thursday',
+                    value: 'thursday',
+                },
+                {
+                    name: 'Friday',
+                    value: 'friday',
+                },
+                {
+                    name: 'Saturday',
+                    value: 'saturday',
+                },
+                {
+                    name: 'Sunday',
+                    value: 'sunday',
+                },
+            ],
+        }],
+    }
+];
 
-client.once('ready', async () => {
-	console.log('Ready!');
-    
-	if (!client.application?.owner) await client.application?.fetch();
-
+async function recacheMembers() {
     await client.guilds.fetch();
     for (var e of client.guilds.cache) {
-        for (var c of e[1].commands.cache)
-            await c[1].delete();
+        await e[1].roles.fetch();
+        await e[1].members.fetch();
+        //for (var c of e[1].commands.cache)
+        //    await c[1].delete();
         await e[1].commands.set(data);
     }
+}
+
+async function redoSavedSchedule(wat, brecache)
+{
+    if (brecache)
+        recacheMembers();
+    var match = wat.content.match(/<@&(\d+)>/g);
+    if (match == null) return;
+    
+    var role = match[0].slice(3, -1);
+
+    var members = wat.guild.roles.cache.get(role)?.members;
+
+    var userlist = "";
+    members.forEach((member) => {
+        userlist += "<@" + member.user.id + ">" + ", ";
+    })
+    userlist = userlist.slice(0, -2);
+
+    var content = `Members with Role: <@&${role}>.\nReact on days where you **CANNOT** run.\n`;
+
+    const exclusions = require('./exclusions.json');
+
+    for (var i = 0; i < 7; i++)
+    {
+        var thing = await wat.reactions.resolve(daysymbols[(i + 3) % 7]);
+        if (thing)
+            thing = await thing.fetch();
+        if (thing) {
+            var reacts = await thing.users.fetch();
+            content += `${daysymbols[(i + 3) % 7]} ${daytranslate[(i + 3) % 7]}: `;
+            var temp = "";
+            members.forEach((member) => {
+                if ((exclusions[member.user.id] == null || !exclusions[member.user.id][daytranslate[(i + 3) % 7].toLowerCase()])
+                    && reacts.get(member.user.id) == null && member.user.id != client.user.id)
+                {
+                    temp += "<@" + member.user.id + ">" + ", ";
+                }
+            });
+            content += temp.slice(0, -2) + "\n";
+        } else {
+            console.log(`post with content ${wat.content} is missing reaction for ${daytranslate[(i + 3) % 7]}`);
+        }
+    }
+
+    await wat.edit({ content: content });
+        
+}
+async function redoSavedSchedules() {
+    const schedules = require('./schedules.json');
+    for (var e of client.guilds.cache) {
+        for (const [channel, message] of Object.entries(schedules)) {
+            var ch = e[1].channels.cache.get(channel);
+            if (ch) {
+                var wat = ch.messages.cache.get(message);
+                if (wat) {
+                    redoSavedSchedule(wat, false);
+                }
+            }
+        }
+    }
+}
+
+client.once('ready', async () => {
+    if (!client.application?.owner) await client.application?.fetch();
+    
+    recacheMembers();
+    redoSavedSchedules();
+
+    console.log('Ready!');
 });
 
 const daytranslate = [
@@ -122,15 +192,6 @@ const daysymbols = [
     "🔴",
 ];
 
-async function recacheMembers() {
-    await client.guilds.fetch();
-    for (var e of client.guilds.cache) {
-        for (var c of e[1].commands.cache)
-            await c[1].delete();
-        await e[1].commands.set(data);
-    }
-}
-
 client.on('guildMemberUpdate', recacheMembers);
 client.on('guildMemberAdd', recacheMembers);
 client.on('guildCreate', recacheMembers);
@@ -141,12 +202,12 @@ client.on('interactionCreate', async interaction => {
 	const command = interaction.commandName;
 
     if (command === 'timepost') {
+        await interaction.deferReply({ ephemeral : false });
         const schedules = require('./schedules.json');
         var wat = await interaction.channel.messages.fetch(schedules[interaction.channel.id]);
 
         if (wat && wat.author.id == client.user.id)
         {
-            await interaction.deferReply({ ephemeral : false });
             var match = wat.content.match(/<@&(\d+)>/g);
             if (match != null)
             {
@@ -160,7 +221,7 @@ client.on('interactionCreate', async interaction => {
 
                 var cmdmatches = interaction.options.getString("time").match(/([a-zA-Z0-9:]+)/g);
 
-                var userlists = daysymbols;
+                var userlists = daysymbols.slice();
 
                 var emotelist = [
                     "0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"
@@ -172,7 +233,7 @@ client.on('interactionCreate', async interaction => {
 
                 for (var i = 0; i < 7; i++) {
                     var react = userlists[(i + 3) % 7];
-                    var thing = await wat.reactions.resolve(react);
+                    var thing = await wat.reactions.cache.get(react);
                     if (thing) {
                         var reacts = await thing.users.fetch();
                         var userlist = "";
@@ -186,7 +247,7 @@ client.on('interactionCreate', async interaction => {
 
                         userlists[(i + 3) % 7] = userlist.slice(0, -2);
                         
-                        console.log(`${daytranslate[(i + 3) % 7]} has ${count} and ${memberCount}`);
+                        // console.log(`${daytranslate[(i + 3) % 7]} has ${count} and ${memberCount}`);
                         
                         if ((count == memberCount || count >= 6) && count > bestReactionCount)  {
                             var content = `${daytranslate[(i + 3) % 7]}: React on times when you **CAN** run.\nMembers: ${userlists[(i + 3) % 7]}.\n`;
@@ -197,7 +258,7 @@ client.on('interactionCreate', async interaction => {
                         }
                     }
                 };
-
+                
                 if (bestReactionCount > 0) {
                     var content = bestContent;
                     var monday = new Date();
@@ -214,11 +275,14 @@ client.on('interactionCreate', async interaction => {
                     var wut = await interaction.channel.send({ content: content });
                     for (var f = 1; f < c; f++)
                         await wut.react(emotelist[f]);
+                    await wut.react("👎");
                 }
             }
-            interaction.deleteReply();
-            return;
         }
+        interaction.deleteReply();
+    } else if (command === 'ping') {
+        await interaction.deferReply({ ephemeral : true });
+        interaction.editReply({ content: `:pingREEE:` });
     } else if (command === 'exclude') {
         await interaction.deferReply({ ephemeral : true });
         const day = interaction.options.getString('day');
@@ -280,6 +344,9 @@ client.on('interactionCreate', async interaction => {
     } else if (command === 'schedule') {
         await interaction.deferReply({ ephemeral : false });
 
+        await interaction.guild.roles.fetch();
+        await interaction.guild.members.fetch();
+
         const role = interaction.options.getRole('role').id;
         var members = interaction.guild.roles.cache.get(role).members;
 
@@ -293,7 +360,6 @@ client.on('interactionCreate', async interaction => {
         var content = `Members with Role: <@&${role}>.\nReact on days where you **CANNOT** run.\n`;
 
         const exclusions = require('./exclusions.json');
-
         var possibleDays = [];
 
         for (var i = 0; i < 7; i++)
@@ -316,6 +382,7 @@ client.on('interactionCreate', async interaction => {
         }
 
         var wat = await interaction.channel.send({ content: content });
+        
         try {
             for (var i = 0; i < possibleDays.length; i++)
                 await wat.react(possibleDays[i]);
@@ -355,53 +422,7 @@ async function handleReaction(reaction, user) {
     const schedules = require('./schedules.json');
     if (schedules[reaction.message.channel.id] !== reaction.message.id) return;
 
-    var wat = reaction.message;
-    var match = wat.content.match(/<@&(\d+)>/g);
-    if (match == null) return;
-
-    var role = match[0].slice(3, -1);
-    
-    await wat.guild.roles.fetch();
-    await wat.guild.members.fetch();
-    var members = (await wat.guild.roles.fetch(role)).members;
-    if (members.size == 0)
-    {
-        console.log(`post with content ${wat.content} has no members!`);
-    }
-
-    var userlist = "";
-    members.forEach((member) => {
-        userlist += "<@" + member.user.id + ">" + ", ";
-    })
-    userlist = userlist.slice(0, -2);
-
-    var content = `Members with Role: <@&${role}>.\nReact on days where you **CANNOT** run.\n`;
-
-    const exclusions = require('./exclusions.json');
-
-    for (var i = 0; i < 7; i++)
-    {
-        var thing = await wat.reactions.resolve(daysymbols[(i + 3) % 7]);
-        if (thing)
-            thing = await thing.fetch();
-        if (thing) {
-            var reacts = await thing.users.fetch();
-            content += `${daysymbols[(i + 3) % 7]} ${daytranslate[(i + 3) % 7]}: `;
-            var temp = "";
-            members.forEach((member) => {
-                if ((exclusions[member.user.id] == null || !exclusions[member.user.id][daytranslate[(i + 3) % 7].toLowerCase()])
-                    && reacts.get(member.user.id) == null && member.user.id != client.user.id)
-                {
-                    temp += "<@" + member.user.id + ">" + ", ";
-                }
-            });
-            content += temp.slice(0, -2) + "\n";
-        } else {
-            console.log(`post with content ${wat.content} is missing reaction for ${daytranslate[(i + 3) % 7]}`);
-        }
-    }
-
-    wat.edit({ content: content });
+    redoSavedSchedule(reaction.message, true);
 }
 
 client.on('messageReactionAdd', handleReaction);
